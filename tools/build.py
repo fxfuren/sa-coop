@@ -26,9 +26,9 @@ ROOT = Path(__file__).resolve().parent.parent
 TC = ROOT / "toolchain" / "llvm-mingw" / "bin"
 BUILD = ROOT / "build"
 
-CC = TC / "i686-w64-mingw32-clang.exe"
-CXX = TC / "i686-w64-mingw32-clang++.exe"
-WINDRES = TC / "i686-w64-mingw32-windres.exe"
+CC = TC / "i686-w64-mingw32-clang"
+CXX = TC / "i686-w64-mingw32-clang++"
+WINDRES = TC / "i686-w64-mingw32-windres"
 
 COMMON_DEFS = ["-DWIN32_LEAN_AND_MEAN", "-DNOMINMAX", "-D_WIN32_WINNT=0x0601", "-D_CRT_SECURE_NO_WARNINGS"]
 WARN = ["-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers",

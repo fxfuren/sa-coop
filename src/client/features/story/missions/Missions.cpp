@@ -2144,7 +2144,20 @@ void StandNextToCutsceneCj() {
     if (!scene::CurrentSpot(spot)) return;
     CPlayerPed* me = FindPlayerPed(0);
     if (CEntity* cj = CutsceneCj()) me->AreaCode() = cj->AreaCode();
-    scene::Hold(me, spot);
+    int partnerIdx = 0;
+    for (auto& [pid, p] : Net().Peers()) {
+        if (pid == Net().HostId()) continue;
+        if (pid == Net().MyId()) break;
+        ++partnerIdx;
+    }
+    scene::Spot mySpot = spot;
+    if (spot.pose != scene::POSE_CAR && partnerIdx > 0) {
+        float sign = (partnerIdx % 2 == 1) ? 1.0f : -1.0f;
+        float step = ((partnerIdx + 1) / 2) * 0.65f;
+        mySpot.ground.x += -std::sin(spot.heading) * sign * step;
+        mySpot.ground.y += std::cos(spot.heading) * sign * step;
+    }
+    scene::Hold(me, mySpot);
     if (const RemotePlayer* host = Players::Instance().Get(Net().HostId()); host && host->ped) {
         host->ped->Flags() &= ~0x80u;  // the cutscene CJ is the host
         Cmd(0x04D7).I(host->pedHandle).I(1).Run();  // FREEZE_CHAR_POSITION: no collision around it now
@@ -3564,12 +3577,21 @@ private:
         if (scene::TakeDecision(spot, at)) SendSpot(spot, at);
         if (cs && scene::CurrentSpot(spot)) {  // the partner joins the scene (and its game takes the same spot)
             CEntity* cj = CutsceneCj();
+            int partnerIndex = 0;
             for (auto& [id, rp] : Players::Instance().All())
                 if (rp.ped) {
                     // the scene's interior, not the one its game reports: before its cutscene starts there and after
                     // it ends it is elsewhere, and a ped of another area is not drawn (it vanished from the scene)
                     if (cj) rp.ped->AreaCode() = cj->AreaCode();
-                    scene::Hold(rp.ped, spot);
+                    scene::Spot s = spot;
+                    if (s.pose != scene::POSE_CAR && partnerIndex > 0) {
+                        float sign = (partnerIndex % 2 == 1) ? 1.0f : -1.0f;
+                        float step = ((partnerIndex + 1) / 2) * 0.65f;
+                        s.ground.x += -std::sin(spot.heading) * sign * step;
+                        s.ground.y += std::cos(spot.heading) * sign * step;
+                    }
+                    scene::Hold(rp.ped, s);
+                    ++partnerIndex;
                 }
             g_sceneHeld = true;
         } else if (!cs && g_sceneHeld) {

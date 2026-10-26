@@ -46,7 +46,9 @@ struct Copy {
     CEntity* target;   // what it burns (nullptr: a spot)
     CVector at;        // a spot's place
 };
-std::map<uint16_t, Copy> g_copies;    // fires lit here for the other game, by its id
+// fires lit here for the other game, by (playerId, fireId)
+struct FireKey { uint8_t from; uint16_t id; bool operator<(const FireKey& o) const { return from < o.from || (from == o.from && id < o.id); } };
+std::map<FireKey, Copy> g_copies;
 uint16_t g_nextId = 1;
 uint64_t g_scanMs = 0;
 
@@ -58,7 +60,7 @@ bool Burns(const Copy& c) {
 }
 
 bool IsCopy(uintptr_t f) {
-    for (auto& [id, c] : g_copies)
+    for (auto& [key, c] : g_copies)
         if (c.fire == f && Burns(c)) return true;
     return false;
 }
@@ -166,12 +168,12 @@ void Light(uint8_t from, uint16_t id, uint8_t kind, uint16_t entityId, const CVe
         fire = Field<uintptr_t>(e, e->IsPed() ? 0x730 : 0x490);  // CPed::m_pFire, CVehicle::m_pFire
     }
     if (!fire) return;
-    g_copies[id] = {fire, from, Target(fire), Ref<CVector>(fire + 0x04)};
+    g_copies[{from, id}] = {fire, from, Target(fire), Ref<CVector>(fire + 0x04)};
     LOGD("Fire %04X lit (on %d %04X)", id, kind, entityId);
 }
 
-void PutOut(uint16_t id) {
-    auto it = g_copies.find(id);
+void PutOut(uint8_t from, uint16_t id) {
+    auto it = g_copies.find({from, id});
     if (it == g_copies.end()) return;
     if (Burns(it->second)) CallMethod<0x5393F0>((void*)it->second.fire);  // CFire::Extinguish
     g_copies.erase(it);
@@ -522,14 +524,14 @@ public:
             uint8_t op = r.U8();
             uint16_t id = r.U16();
             if (!r.Ok() || !core::IsPlayerReady()) return;
-            if (op == FIRE_STOP) return PutOut(id);
+            if (op == FIRE_STOP) return PutOut(from, id);
             if (op == FIRE_OUT) return PutOutOwn(id);
             uint8_t kind = r.U8();
             uint16_t entityId = r.U16();
             Vec3 p = r.Vec();
             float strength = r.F32();
             if (!r.Ok()) return;
-            PutOut(id);
+            PutOut(from, id);
             Light(from, id, kind, entityId, {p.x, p.y, p.z}, strength);
         });
     }
@@ -558,9 +560,9 @@ public:
             if (PlayerFighting(Ref<CVector>(it->second.fire + 0x04))) {
                 Writer w(proto::G_FIRE);
                 w.U8(FIRE_OUT);
-                w.U16(it->first);
+                w.U16(it->first.id);
                 Net().Send(proto::CH_RELIABLE, w);
-                LOGI("Fire %04X of player %d put out here", it->first, it->second.from);
+                LOGI("Fire %04X of player %d put out here", it->first.id, it->second.from);
             }
             it = g_copies.erase(it);
         }
